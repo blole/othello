@@ -44,8 +44,10 @@ public class Board {
         String returnString = "";
         for(int row = 0; row < SIZE; row ++ ){
             for(int col = 0; col < SIZE; col++) {
-                returnString += "(" + boardMatrix[row][col] + ") ";
+            	game.COLOR c = boardMatrix[row][col];
+                returnString += c==COLOR.BLACK?"x":c==COLOR.WHITE?"o":".";
             }
+            returnString += "\n";
         }
         return returnString;
     }
