@@ -53,6 +53,19 @@ public class Ox5f3759df extends Player
 		{
 			return children != null;
 		}
+
+		public int leafs()
+		{
+			if (!expanded())
+				return 1;
+			else
+			{
+				int totalLeafs = 0;
+				for (Node child : children)
+					totalLeafs += child.leafs();
+				return totalLeafs;
+			}
+		}
 	}
 	
 	public Ox5f3759df(game.COLOR color)
@@ -110,7 +123,7 @@ public class Ox5f3759df extends Player
 					}
 				}
 				
-				node = select(board, node);
+				node = select(board, node, currentColor);
 				
 				if (!wasExpanded)
 					break;
@@ -125,29 +138,42 @@ public class Ox5f3759df extends Player
 			}
 			
 			//simulate
-			double score = evaluate(board);
+			//double score = evaluate(board);
+			double score = playout(board, currentColor);
 			
 			backpropagate(board, node, score);
 		}
 		
-		return select(rootBoard, root).pos;
+		System.out.printf("root.leafs(): %d\n", root.leafs());
+		System.out.printf("root.visits: %d\n", root.visits);
+		System.out.printf("root.avgReward(): %.2f\n", root.avgReward());
+		
+		return select(rootBoard, root, COLOR).pos;
 	}
 
-	private double playout(Board board, game.COLOR currentColor)
+	private double playout(Board currentBoard, game.COLOR currentColor)
 	{
-		int i = 0;
-		while (!board.gameIsFinished() || i > 60)
+		int playouts = 8;
+		double totalScore = 0;
+		for (int i=0; i<playouts; i++)
 		{
-			LinkedList<Position> moves = board.getAllLegalMoves(currentColor);
-			if (moves != null && !moves.isEmpty())
+			Board board = currentBoard.copy();
+			game.COLOR color = currentColor;
+			int workaround = 0;
+			while (!board.gameIsFinished() && workaround < 120)
 			{
-				if (!board.placeDisk(currentColor, moves.get(rand.nextInt(moves.size()))))
-					throw new RuntimeException("invalid move?");
+				LinkedList<Position> moves = board.getAllLegalMoves(color);
+				if (moves != null && !moves.isEmpty())
+				{
+					if (!board.placeDisk(color, moves.get(rand.nextInt(moves.size()))))
+						throw new RuntimeException("invalid move?");
+				}
+				color = reverseColor(color);
+				workaround++;
 			}
-			currentColor = reverseColor(currentColor);
-			i++;
+			totalScore += evaluate(board);
 		}
-		return evaluate(board);
+		return totalScore/playouts;
 	}
 	
 	private char colorChar(game.COLOR c)
@@ -166,7 +192,7 @@ public class Ox5f3759df extends Player
 		while (node != null);
 	}
 	
-    // returns end game evaluation (our score) (normalized to 0.0-1.0)
+    /** returns end game evaluation (our score) normalized to [-1, 1]**/
     private double evaluate(Board board) {
 
         double myScore, oppScore, numEmpty;
@@ -186,17 +212,13 @@ public class Ox5f3759df extends Player
             }
         }
 
-        if (myScore < oppScore) {
-            return myScore/64;
-        } else if (myScore > oppScore) {
-            return (myScore)/64;
-        } else if (myScore == oppScore) {
-            return myScore/64;
-        }
-        return 0.0d;
+        if (myScore <= oppScore)
+            return myScore/32-1;
+        else // myScore > oppScore
+            return (myScore+numEmpty)/32-1;
     }
 
-    // returns reward for current board state (not normalized)
+    /** returns reward for current board state (not normalized) **/
     private double evaluateMove(Board board) {
         double myScore, oppScore;
         myScore = oppScore = 0.0d;
@@ -224,13 +246,15 @@ public class Ox5f3759df extends Player
         return myScore-oppScore;
     }
 
-	private Node select(Board board, Node node)
+	private Node select(Board board, Node node, game.COLOR color)
 	{
+		int factor = color == COLOR?1:-1;
+		
 		Node best = node.children[0];
-		double bestUCB = best.ucb();
+		double bestUCB = factor * best.ucb();
 		for (int i=1; i<node.children.length; i++)
 		{
-			double ucb = node.children[i].ucb();
+			double ucb = factor * node.children[i].ucb();
 			if (bestUCB < ucb)
 			{
 				best = node.children[i];
